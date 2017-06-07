@@ -14,29 +14,19 @@
  */
 package com.amazonaws.samples;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-import java.util.UUID;
-
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.regions.Region;
 import com.amazonaws.regions.Regions;
-import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3Client;
-import com.amazonaws.services.s3.model.Bucket;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ListObjectsRequest;
-import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
+
+import java.io.*;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * This sample demonstrates how to make basic requests to Amazon S3 using
@@ -62,9 +52,9 @@ public class S3Sample {
          * aws_secret_access_key = YOUR_SECRET_ACCESS_KEY
          */
 
-        AmazonS3 s3 = new AmazonS3Client();
-        Region usWest2 = Region.getRegion(Regions.US_WEST_2);
-        s3.setRegion(usWest2);
+        AmazonS3Client s3 = new AmazonS3Client();
+        getRegion().ifPresent(s3::withRegion);
+        getEndpoint().ifPresent(s3::withEndpoint);
 
         String bucketName = "my-first-s3-bucket-" + UUID.randomUUID();
         String key = "MyObjectKey";
@@ -89,9 +79,7 @@ public class S3Sample {
              * List the buckets in your account
              */
             System.out.println("Listing buckets");
-            for (Bucket bucket : s3.listBuckets()) {
-                System.out.println(" - " + bucket.getName());
-            }
+            s3.listBuckets().forEach(bucket -> System.out.println(" - " + bucket.getName()));
             System.out.println();
 
             /*
@@ -119,7 +107,7 @@ public class S3Sample {
              */
             System.out.println("Downloading an object");
             S3Object object = s3.getObject(new GetObjectRequest(bucketName, key));
-            System.out.println("Content-Type: "  + object.getObjectMetadata().getContentType());
+            System.out.println("Content-Type: " + object.getObjectMetadata().getContentType());
             displayTextInputStream(object.getObjectContent());
 
             /*
@@ -131,13 +119,12 @@ public class S3Sample {
              * additional results.
              */
             System.out.println("Listing objects");
-            ObjectListing objectListing = s3.listObjects(new ListObjectsRequest()
+            s3.listObjects(new ListObjectsRequest()
                     .withBucketName(bucketName)
-                    .withPrefix("My"));
-            for (S3ObjectSummary objectSummary : objectListing.getObjectSummaries()) {
-                System.out.println(" - " + objectSummary.getKey() + "  " +
-                        "(size = " + objectSummary.getSize() + ")");
-            }
+                    .withPrefix("My"))
+                    .getObjectSummaries()
+                    .forEach(objectSummary -> System.out.println(String.format(" - %s (size = %s)",
+                            objectSummary.getKey(), objectSummary.getSize())));
             System.out.println();
 
             /*
@@ -176,7 +163,7 @@ public class S3Sample {
      *
      * @return A newly created temporary file with text data.
      *
-     * @throws IOException
+     * @throws IOException If an I/O error occurs
      */
     private static File createSampleFile() throws IOException {
         File file = File.createTempFile("aws-java-sdk-", ".txt");
@@ -199,17 +186,33 @@ public class S3Sample {
      * @param input
      *            The input stream to display as text.
      *
-     * @throws IOException
+     * @throws IOException If an I/O error occurs
      */
     private static void displayTextInputStream(InputStream input) throws IOException {
-        BufferedReader reader = new BufferedReader(new InputStreamReader(input));
-        while (true) {
-            String line = reader.readLine();
-            if (line == null) break;
-
-            System.out.println("    " + line);
-        }
+        new BufferedReader(new InputStreamReader(input))
+                .lines()
+                .forEach(line -> System.out.println("    " + line));
         System.out.println();
     }
 
+    /**
+     * One may override this with a specific region.
+     *
+     * @return Return empty if region is not to be specified
+     */
+    private static Optional<Region> getRegion() {
+        // e.g. Region.getRegion(Regions.US_WEST_2)
+        return Optional.of(Region.getRegion(Regions.US_WEST_2));
+    }
+
+    /**
+     * One may override this with a specific endpoint
+     * (e.g. mock server endpoint for mock testing purposes).
+     *
+     * @return Return empty if endpoint is not to be specified
+     */
+    private static Optional<String> getEndpoint() {
+        // e.g. Optional.of("http://127.0.0.1:5000");
+        return Optional.empty();
+    }
 }
